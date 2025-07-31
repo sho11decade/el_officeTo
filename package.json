@@ -1,0 +1,50 @@
+{
+  "name": "office-image-extractor",
+  "version": "1.0.0",
+  "description": "Extract and view images from Microsoft Office files",
+  "main": "src/main.js",
+  "homepage": "./",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "build": "electron-builder",
+    "dist": "electron-builder --publish=never",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": ["electron", "office", "image", "extractor", "word", "excel", "powerpoint"],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^37.2.4"
+  },
+  "dependencies": {
+    "electron-builder": "^26.0.12",
+    "mammoth": "^1.9.1",
+    "sharp": "^0.34.3",
+    "xlsx": "^0.18.5",
+    "yauzl": "^3.2.0"
+  },
+  "build": {
+    "appId": "com.office-image-extractor.app",
+    "productName": "Office Image Extractor",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "node_modules/**/*"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.ico"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "assets/icon.icns"
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "assets/icon.png"
+    }
+  }
+}

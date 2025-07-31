@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Office Image Extractor</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- ヘッダー -->
+        <header class="header">
+            <h1>Office Image Extractor</h1>
+            <div class="header-actions">
+                <button id="openFileBtn" class="btn btn-primary">ファイルを開く</button>
+                <button id="saveAllBtn" class="btn btn-secondary" disabled>すべて保存</button>
+            </div>
+        </header>
+
+        <!-- メインコンテンツ -->
+        <main class="main-content">
+            <!-- ファイル一覧パネル -->
+            <aside class="file-panel">
+                <h3>読み込みファイル</h3>
+                <div class="file-list" id="fileList">
+                    <div class="empty-state">
+                        <p>ファイルが選択されていません</p>
+                        <p class="small">「ファイルを開く」ボタンまたはドラッグ&ドロップでファイルを追加してください</p>
+                    </div>
+                </div>
+                <div class="file-stats" id="fileStats" style="display: none;">
+                    <p><strong>統計情報</strong></p>
+                    <p>ファイル数: <span id="fileCount">0</span></p>
+                    <p>画像数: <span id="imageCount">0</span></p>
+                </div>
+            </aside>
+
+            <!-- 画像表示パネル -->
+            <section class="image-panel">
+                <div class="image-panel-header">
+                    <h3>抽出された画像</h3>
+                    <div class="view-controls">
+                        <button id="gridViewBtn" class="btn btn-small active">グリッド</button>
+                        <button id="listViewBtn" class="btn btn-small">リスト</button>
+                    </div>
+                </div>
+                
+                <div class="image-container" id="imageContainer">
+                    <div class="empty-state">
+                        <p>画像がありません</p>
+                        <p class="small">Officeファイルを読み込んで画像を抽出してください</p>
+                    </div>
+                </div>
+                
+                <div class="loading-state" id="loadingState" style="display: none;">
+                    <div class="spinner"></div>
+                    <p>画像を抽出中...</p>
+                </div>
+            </section>
+        </main>
+
+        <!-- ステータスバー -->
+        <footer class="status-bar">
+            <span id="statusText">準備完了</span>
+        </footer>
+    </div>
+
+    <!-- 画像詳細表示モーダル -->
+    <div class="modal" id="imageModal" style="display: none;">
+        <div class="modal-backdrop" id="modalBackdrop"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalTitle">画像詳細</h3>
+                <button class="modal-close" id="modalClose">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="modal-image-container">
+                    <img id="modalImage" src="" alt="">
+                </div>
+                <div class="modal-info">
+                    <table>
+                        <tr>
+                            <td>ファイル名:</td>
+                            <td id="modalImageName">-</td>
+                        </tr>
+                        <tr>
+                            <td>形式:</td>
+                            <td id="modalImageFormat">-</td>
+                        </tr>
+                        <tr>
+                            <td>サイズ:</td>
+                            <td id="modalImageDimensions">-</td>
+                        </tr>
+                        <tr>
+                            <td>ファイルサイズ:</td>
+                            <td id="modalImageSize">-</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="modalSaveBtn" class="btn btn-primary">保存</button>
+                <button id="modalCloseBtn" class="btn btn-secondary">閉じる</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ドラッグ&ドロップオーバーレイ -->
+    <div class="drag-overlay" id="dragOverlay" style="display: none;">
+        <div class="drag-content">
+            <div class="drag-icon">📁</div>
+            <p>ここにOfficeファイルをドロップしてください</p>
+            <p class="small">対応形式: .docx, .doc, .xlsx, .xls, .pptx, .ppt</p>
+        </div>
+    </div>
+
+    <script src="renderer.js"></script>
+</body>
+</html>
