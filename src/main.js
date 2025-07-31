@@ -1,6 +1,7 @@
-const { app, BrowserWindow, ipcMain, dialog, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Menu, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const yazl = require('yazl');
 const { extractImages } = require('./utils/imageExtractor');
 
 let mainWindow;
@@ -94,6 +95,13 @@ function createMenu() {
         {
             label: 'ヘルプ',
             submenu: [
+                {
+                    label: 'GitHubリポジトリ',
+                    click: () => {
+                        shell.openExternal('https://github.com/sho11decade/el_officeTo');
+                    }
+                },
+                { type: 'separator' },
                 {
                     label: 'このアプリについて',
                     click: () => {
@@ -212,3 +220,103 @@ ipcMain.handle('save-all-images', async (event, images) => {
 ipcMain.handle('show-open-dialog', async () => {
     return await openFileDialog();
 });
+
+ipcMain.handle('export-images-zip', async (event, images, sourceFileName) => {
+    try {
+        const defaultFileName = `${sourceFileName || 'extracted_images'}_${new Date().toISOString().slice(0, 10)}.zip`;
+        
+        const result = await dialog.showSaveDialog(mainWindow, {
+            defaultPath: defaultFileName,
+            filters: [
+                { name: 'ZIP Archives', extensions: ['zip'] },
+                { name: 'All Files', extensions: ['*'] }
+            ]
+        });
+
+        if (!result.canceled && result.filePath) {
+            const zipFile = new yazl.ZipFile();
+            const exportedCount = await createZipFile(zipFile, images, result.filePath);
+            
+            return { 
+                success: true, 
+                filePath: result.filePath,
+                exportedCount: exportedCount
+            };
+        }
+        
+        return { success: false, error: 'Export cancelled' };
+    } catch (error) {
+        console.error('Export ZIP error:', error);
+        return { success: false, error: error.message };
+    }
+});
+
+// ZIPファイル作成のヘルパー関数
+function createZipFile(zipFile, images, outputPath) {
+    return new Promise((resolve, reject) => {
+        let addedCount = 0;
+        let processedCount = 0;
+        
+        // 同名ファイルを避けるためのカウンター
+        const fileNameCounts = {};
+        
+        images.forEach((image, index) => {
+            try {
+                // Base64データをBufferに変換
+                const base64Data = image.data.replace(/^data:image\/\w+;base64,/, '');
+                const buffer = Buffer.from(base64Data, 'base64');
+                
+                // ファイル名の重複を避ける
+                let fileName = image.name || `image_${index + 1}.${image.format || 'png'}`;
+                const baseName = path.parse(fileName).name;
+                const extension = path.parse(fileName).ext || `.${image.format || 'png'}`;
+                
+                if (fileNameCounts[fileName]) {
+                    fileNameCounts[fileName]++;
+                    fileName = `${baseName}_${fileNameCounts[fileName]}${extension}`;
+                } else {
+                    fileNameCounts[fileName] = 1;
+                }
+                
+                // ZIPファイルにエントリを追加
+                zipFile.addBuffer(buffer, fileName, {
+                    mtime: new Date(),
+                    mode: parseInt('0644', 8) // ファイル権限
+                });
+                
+                addedCount++;
+            } catch (error) {
+                console.error(`Error processing image ${index}:`, error);
+            }
+            
+            processedCount++;
+            
+            // 全ての画像を処理完了したらZIPファイルを終了
+            if (processedCount === images.length) {
+                zipFile.end();
+            }
+        });
+        
+        // 空の場合の処理
+        if (images.length === 0) {
+            zipFile.end();
+        }
+        
+        // ZIPファイルの出力ストリーム作成
+        const outputStream = fs.createWriteStream(outputPath);
+        
+        zipFile.outputStream.pipe(outputStream);
+        
+        zipFile.outputStream.on('end', () => {
+            resolve(addedCount);
+        });
+        
+        zipFile.outputStream.on('error', (error) => {
+            reject(error);
+        });
+        
+        outputStream.on('error', (error) => {
+            reject(error);
+        });
+    });
+}

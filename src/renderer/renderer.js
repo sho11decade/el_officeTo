@@ -2,6 +2,7 @@
 const elements = {
     openFileBtn: document.getElementById('openFileBtn'),
     saveAllBtn: document.getElementById('saveAllBtn'),
+    exportZipBtn: document.getElementById('exportZipBtn'),
     fileList: document.getElementById('fileList'),
     fileStats: document.getElementById('fileStats'),
     fileCount: document.getElementById('fileCount'),
@@ -22,6 +23,7 @@ const elements = {
     modalImageDimensions: document.getElementById('modalImageDimensions'),
     modalImageSize: document.getElementById('modalImageSize'),
     modalSaveBtn: document.getElementById('modalSaveBtn'),
+    modalExportZipBtn: document.getElementById('modalExportZipBtn'),
     dragOverlay: document.getElementById('dragOverlay')
 };
 
@@ -51,6 +53,11 @@ function initializeEventListeners() {
         saveAllImages();
     });
 
+    // ZIPエクスポートボタン
+    elements.exportZipBtn.addEventListener('click', () => {
+        exportAllImagesAsZip();
+    });
+
     // ビュー切り替えボタン
     elements.gridViewBtn.addEventListener('click', () => {
         setView('grid');
@@ -65,6 +72,7 @@ function initializeEventListeners() {
     elements.modalCloseBtn.addEventListener('click', closeModal);
     elements.modalBackdrop.addEventListener('click', closeModal);
     elements.modalSaveBtn.addEventListener('click', saveCurrentImage);
+    elements.modalExportZipBtn.addEventListener('click', exportCurrentImageAsZip);
 
     // ESCキーでモーダルを閉じる
     document.addEventListener('keydown', (e) => {
@@ -191,6 +199,7 @@ function updateImageDisplay() {
             </div>
         `;
         elements.saveAllBtn.disabled = true;
+        elements.exportZipBtn.disabled = true;
         return;
     }
 
@@ -223,6 +232,7 @@ function updateImageDisplay() {
     });
 
     elements.saveAllBtn.disabled = false;
+    elements.exportZipBtn.disabled = false;
 }
 
 // 統計情報の更新
@@ -326,6 +336,73 @@ function formatFileSize(bytes) {
     
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 }
+
+// すべての画像をZIPファイルとしてエクスポート
+async function exportAllImagesAsZip() {
+    if (appState.allImages.length === 0) return;
+    
+    try {
+        updateStatus('ZIPファイルを作成中...');
+        
+        // 最初のファイル名を取得（複数の場合は混合）
+        const sourceFileName = appState.files.length === 1 
+            ? path.parse(appState.files[0].fileName).name 
+            : 'extracted_images';
+            
+        const result = await window.electronAPI.exportImagesZip(appState.allImages, sourceFileName);
+        
+        if (result.success) {
+            updateStatus(`${result.exportedCount}個の画像をZIPファイルに保存しました: ${result.filePath}`);
+        } else {
+            updateStatus('ZIPファイルの作成に失敗しました');
+        }
+    } catch (error) {
+        console.error('Error exporting ZIP:', error);
+        updateStatus('ZIPファイルの作成中にエラーが発生しました');
+    }
+}
+
+// 現在の画像をZIPファイルとしてエクスポート
+async function exportCurrentImageAsZip() {
+    if (!appState.selectedImage) return;
+    
+    try {
+        updateStatus('ZIPファイルを作成中...');
+        
+        const imageName = path.parse(appState.selectedImage.name).name;
+        const result = await window.electronAPI.exportImagesZip([appState.selectedImage], imageName);
+        
+        if (result.success) {
+            updateStatus(`画像をZIPファイルに保存しました: ${result.filePath}`);
+            closeModal();
+        } else {
+            updateStatus('ZIPファイルの作成に失敗しました');
+        }
+    } catch (error) {
+        console.error('Error exporting ZIP:', error);
+        updateStatus('ZIPファイルの作成中にエラーが発生しました');
+    }
+}
+
+// path モジュールの簡易実装（ブラウザ環境用）
+const path = {
+    parse: (filePath) => {
+        const lastDot = filePath.lastIndexOf('.');
+        const lastSlash = Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\'));
+        
+        if (lastDot > lastSlash && lastDot !== -1) {
+            return {
+                name: filePath.substring(lastSlash + 1, lastDot),
+                ext: filePath.substring(lastDot)
+            };
+        } else {
+            return {
+                name: filePath.substring(lastSlash + 1),
+                ext: ''
+            };
+        }
+    }
+};
 
 // エラーハンドリング
 window.addEventListener('error', (event) => {

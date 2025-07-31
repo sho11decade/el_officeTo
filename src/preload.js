@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     extractImages: (filePaths) => ipcRenderer.invoke('extract-images', filePaths),
     saveImage: (imageData, defaultName) => ipcRenderer.invoke('save-image', imageData, defaultName),
     saveAllImages: (images) => ipcRenderer.invoke('save-all-images', images),
+    exportImagesZip: (images, sourceFileName) => ipcRenderer.invoke('export-images-zip', images, sourceFileName),
     showOpenDialog: () => ipcRenderer.invoke('show-open-dialog'),
     
     // イベントリスナー
