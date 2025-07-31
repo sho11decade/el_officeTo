@@ -1,45 +1,174 @@
-// DOM要素の取得
-const elements = {
-    openFileBtn: document.getElementById('openFileBtn'),
-    saveAllBtn: document.getElementById('saveAllBtn'),
-    exportZipBtn: document.getElementById('exportZipBtn'),
-    fileList: document.getElementById('fileList'),
-    fileStats: document.getElementById('fileStats'),
-    fileCount: document.getElementById('fileCount'),
-    imageCount: document.getElementById('imageCount'),
-    imageContainer: document.getElementById('imageContainer'),
-    loadingState: document.getElementById('loadingState'),
-    gridViewBtn: document.getElementById('gridViewBtn'),
-    listViewBtn: document.getElementById('listViewBtn'),
-    statusText: document.getElementById('statusText'),
-    imageModal: document.getElementById('imageModal'),
-    modalBackdrop: document.getElementById('modalBackdrop'),
-    modalClose: document.getElementById('modalClose'),
-    modalCloseBtn: document.getElementById('modalCloseBtn'),
-    modalTitle: document.getElementById('modalTitle'),
-    modalImage: document.getElementById('modalImage'),
-    modalImageName: document.getElementById('modalImageName'),
-    modalImageFormat: document.getElementById('modalImageFormat'),
-    modalImageDimensions: document.getElementById('modalImageDimensions'),
-    modalImageSize: document.getElementById('modalImageSize'),
-    modalSaveBtn: document.getElementById('modalSaveBtn'),
-    modalExportZipBtn: document.getElementById('modalExportZipBtn'),
-    dragOverlay: document.getElementById('dragOverlay')
+// DOM要素の取得（キャッシュ化）
+const elements = (() => {
+    const cache = {};
+    const getElement = (id) => {
+        if (!cache[id]) {
+            cache[id] = document.getElementById(id);
+        }
+        return cache[id];
+    };
+    
+    return {
+        get openFileBtn() { return getElement('openFileBtn'); },
+        get saveAllBtn() { return getElement('saveAllBtn'); },
+        get exportZipBtn() { return getElement('exportZipBtn'); },
+        get fileList() { return getElement('fileList'); },
+        get fileStats() { return getElement('fileStats'); },
+        get fileCount() { return getElement('fileCount'); },
+        get imageCount() { return getElement('imageCount'); },
+        get imageContainer() { return getElement('imageContainer'); },
+        get loadingState() { return getElement('loadingState'); },
+        get gridViewBtn() { return getElement('gridViewBtn'); },
+        get listViewBtn() { return getElement('listViewBtn'); },
+        get statusText() { return getElement('statusText'); },
+        get imageModal() { return getElement('imageModal'); },
+        get modalBackdrop() { return getElement('modalBackdrop'); },
+        get modalClose() { return getElement('modalClose'); },
+        get modalCloseBtn() { return getElement('modalCloseBtn'); },
+        get modalTitle() { return getElement('modalTitle'); },
+        get modalImage() { return getElement('modalImage'); },
+        get modalImageName() { return getElement('modalImageName'); },
+        get modalImageFormat() { return getElement('modalImageFormat'); },
+        get modalImageDimensions() { return getElement('modalImageDimensions'); },
+        get modalImageSize() { return getElement('modalImageSize'); },
+        get modalSaveBtn() { return getElement('modalSaveBtn'); },
+        get modalExportZipBtn() { return getElement('modalExportZipBtn'); },
+        get dragOverlay() { return getElement('dragOverlay'); }
+    };
+})();
+
+// パフォーマンス設定
+const PERFORMANCE_CONFIG = {
+    VIRTUAL_SCROLL_THRESHOLD: 50, // 50枚以上で仮想スクロール
+    LAZY_LOAD_THRESHOLD: 10, // 10枚以上で遅延読み込み
+    BATCH_RENDER_SIZE: 20, // バッチレンダリングサイズ
+    DEBOUNCE_DELAY: 250 // デバウンス遅延（ミリ秒）
 };
 
-// アプリケーションの状態
+// アプリケーションの状態（最適化）
 let appState = {
     files: [],
     allImages: [],
+    visibleImages: [], // 表示中の画像
     currentView: 'grid',
-    selectedImage: null
+    selectedImage: null,
+    isLoading: false,
+    renderQueue: [] // レンダリングキュー
 };
 
 // 初期化
 document.addEventListener('DOMContentLoaded', () => {
     initializeEventListeners();
+    initializePerformanceOptimizations();
     updateStatus('準備完了');
 });
+
+// パフォーマンス最適化の初期化
+function initializePerformanceOptimizations() {
+    // Intersection Observer for lazy loading
+    if (window.IntersectionObserver) {
+        window.imageObserver = new IntersectionObserver(
+            debounce(handleImageIntersection, 100),
+            { rootMargin: '50px', threshold: 0.1 }
+        );
+    }
+    
+    // Virtual scrolling setup
+    elements.imageContainer.addEventListener('scroll', 
+        throttle(handleVirtualScroll, 16) // 60fps
+    );
+    
+    // Memory cleanup on visibility change
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+}
+
+// デバウンス関数
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
+// スロットル関数
+function throttle(func, limit) {
+    let inThrottle;
+    return function() {
+        const args = arguments;
+        const context = this;
+        if (!inThrottle) {
+            func.apply(context, args);
+            inThrottle = true;
+            setTimeout(() => inThrottle = false, limit);
+        }
+    };
+}
+
+// 仮想スクロール処理
+function handleVirtualScroll() {
+    if (appState.allImages.length < PERFORMANCE_CONFIG.VIRTUAL_SCROLL_THRESHOLD) {
+        return; // 閾値以下では通常表示
+    }
+    
+    // 仮想スクロールの実装（簡易版）
+    const container = elements.imageContainer;
+    const scrollTop = container.scrollTop;
+    const containerHeight = container.clientHeight;
+    
+    // 表示領域の計算
+    const itemHeight = 200; // 推定アイテム高さ
+    const startIndex = Math.floor(scrollTop / itemHeight);
+    const endIndex = Math.min(
+        startIndex + Math.ceil(containerHeight / itemHeight) + 2,
+        appState.allImages.length
+    );
+    
+    // 表示範囲の更新
+    appState.visibleImages = appState.allImages.slice(startIndex, endIndex);
+    console.log(`Virtual scroll: showing ${startIndex}-${endIndex} of ${appState.allImages.length}`);
+}
+
+// Intersection Observer処理
+function handleImageIntersection(entries) {
+    entries.forEach(entry => {
+        if (entry.isIntersecting) {
+            const img = entry.target;
+            const dataSrc = img.getAttribute('data-src');
+            
+            if (dataSrc && !img.src) {
+                img.src = dataSrc;
+                img.removeAttribute('data-src');
+                window.imageObserver?.unobserve(img);
+            }
+        }
+    });
+}
+
+// ページ非表示時のメモリクリーンアップ
+function handleVisibilityChange() {
+    if (document.hidden) {
+        // ページが非表示になった場合、メモリ使用量を削減
+        const images = document.querySelectorAll('.image-thumbnail');
+        images.forEach(img => {
+            if (img.src && img.src.startsWith('data:')) {
+                img.setAttribute('data-src', img.src);
+                img.src = '';
+            }
+        });
+        
+        // ガベージコレクションを促進
+        if (window.gc) {
+            window.gc();
+        }
+        
+        console.log('Memory cleanup performed due to page visibility change');
+    }
+}
 
 // イベントリスナーの初期化
 function initializeEventListeners() {
@@ -81,29 +210,147 @@ function initializeEventListeners() {
         }
     });
 
-    // ドラッグ&ドロップ
-    document.addEventListener('dragover', (e) => {
+    // ドラッグ&ドロップ（エラー修正版）
+    let dragCounter = 0;
+    
+    document.addEventListener('dragenter', (e) => {
         e.preventDefault();
+        dragCounter++;
         elements.dragOverlay.style.display = 'flex';
     });
 
+    document.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+    });
+
     document.addEventListener('dragleave', (e) => {
-        if (e.clientX === 0 && e.clientY === 0) {
+        e.preventDefault();
+        dragCounter--;
+        if (dragCounter === 0) {
             elements.dragOverlay.style.display = 'none';
         }
     });
 
-    document.addEventListener('drop', (e) => {
+    document.addEventListener('drop', async (e) => {
         e.preventDefault();
+        dragCounter = 0;
         elements.dragOverlay.style.display = 'none';
         
-        const files = Array.from(e.dataTransfer.files);
-        const filePaths = files.map(file => file.path).filter(path => isOfficeFile(path));
-        
-        if (filePaths.length > 0) {
-            processFiles(filePaths);
-        } else {
-            updateStatus('対応していないファイル形式です');
+        try {
+            const files = Array.from(e.dataTransfer.files);
+            console.log('Dropped files raw:', files.map(f => ({ 
+                name: f.name, 
+                path: f.path, 
+                type: f.type,
+                size: f.size,
+                lastModified: f.lastModified
+            })));
+            
+            if (files.length === 0) {
+                updateStatus('ファイルがドロップされませんでした');
+                return;
+            }
+            
+            updateStatus('ドロップされたファイルを処理中...');
+            
+            const officeFiles = files.filter(file => isOfficeFile(file.name));
+            
+            if (officeFiles.length === 0) {
+                const fileNames = files.map(f => f.name).join(', ');
+                updateStatus(`対応していないファイル形式です: ${fileNames}`);
+                return;
+            }
+            
+            // 複数の方法でファイルパスを取得
+            const validFilePaths = [];
+            const failedFiles = [];
+            
+            for (const file of officeFiles) {
+                let filePath = null;
+                
+                // 方法1: file.path を直接使用
+                if (file.path && file.path.trim() !== '') {
+                    filePath = file.path;
+                    console.log(`Method 1 - Using file.path: ${filePath}`);
+                }
+                
+                // 方法2: File API を使用してバイナリデータから処理
+                else if (file instanceof File) {
+                    try {
+                        console.log(`Method 2 - Using File API for: ${file.name}`);
+                        
+                        // FileReader を使用してファイルデータを読み取り
+                        const arrayBuffer = await readFileAsArrayBuffer(file);
+                        
+                        if (arrayBuffer && arrayBuffer.byteLength > 0) {
+                            // バイナリデータを直接メインプロセスに送信
+                            const result = await window.electronAPI.processFileBuffer({
+                                name: file.name,
+                                buffer: arrayBuffer,
+                                size: file.size,
+                                type: file.type,
+                                lastModified: file.lastModified
+                            });
+                            
+                            if (result && result.success) {
+                                console.log(`File buffer processed successfully: ${file.name}`);
+                                
+                                // 成功した場合、画像データを直接処理
+                                if (result.data && result.data.images) {
+                                    const fileData = {
+                                        fileName: file.name,
+                                        success: true,
+                                        images: result.data.images
+                                    };
+                                    
+                                    // 既存の処理フローに統合
+                                    appState.files = [fileData];
+                                    appState.allImages = [];
+                                    
+                                    fileData.images.forEach(image => {
+                                        image.sourceFile = file.name;
+                                        appState.allImages.push(image);
+                                    });
+                                    
+                                    updateFileList();
+                                    updateImageDisplay();
+                                    updateStats();
+                                    updateStatus(`${file.name}から${result.data.images.length}個の画像を抽出しました`);
+                                    return; // 成功したので処理終了
+                                }
+                            }
+                        }
+                    } catch (bufferError) {
+                        console.error(`File buffer processing failed for ${file.name}:`, bufferError);
+                    }
+                }
+                
+                if (filePath) {
+                    validFilePaths.push(filePath);
+                } else {
+                    failedFiles.push(file.name);
+                    console.warn(`Could not get path for file: ${file.name}`);
+                }
+            }
+            
+            // 従来のパス方式で処理可能なファイルがある場合
+            if (validFilePaths.length > 0) {
+                console.log('Processing files with paths:', validFilePaths);
+                await processFiles(validFilePaths);
+                
+                if (failedFiles.length > 0) {
+                    setTimeout(() => {
+                        updateStatus(`一部のファイル (${failedFiles.join(', ')}) は処理できませんでした。「ファイルを開く」ボタンを使用してください。`);
+                    }, 2000);
+                }
+            } else if (failedFiles.length > 0) {
+                updateStatus(`ファイルパスを取得できませんでした: ${failedFiles.join(', ')}。「ファイルを開く」ボタンを使用してファイルを選択してください。`);
+            }
+            
+        } catch (error) {
+            console.error('ドラッグ&ドロップエラー:', error);
+            updateStatus('ファイルの読み込み中にエラーが発生しました。「ファイルを開く」ボタンを使用してください。');
         }
     });
 
@@ -120,38 +367,133 @@ function isOfficeFile(filePath) {
     return supportedExtensions.includes(ext);
 }
 
-// ファイル処理
-async function processFiles(filePaths) {
-    try {
-        updateStatus('ファイルを処理中...');
-        showLoading(true);
+// FileReader を使用してファイルを ArrayBuffer として読み取り
+function readFileAsArrayBuffer(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        
+        reader.onload = (event) => {
+            resolve(event.target.result);
+        };
+        
+        reader.onerror = (error) => {
+            console.error('FileReader error:', error);
+            reject(error);
+        };
+        
+        reader.readAsArrayBuffer(file);
+    });
+}
 
-        const result = await window.electronAPI.extractImages(filePaths);
+// ファイル処理（エラーハンドリング強化版）
+async function processFiles(filePaths) {
+    if (!filePaths || filePaths.length === 0) {
+        updateStatus('処理するファイルが選択されていません');
+        return;
+    }
+
+    // ファイルパスの前処理（日本語ファイル名対応）
+    const processedFilePaths = filePaths.map(filePath => {
+        try {
+            // パスの正規化
+            const normalizedPath = filePath.replace(/\\/g, '/').replace(/\/+/g, '/');
+            console.log(`Original: ${filePath} -> Normalized: ${normalizedPath}`);
+            return filePath; // 元のパスを使用（Electronでは正しく処理される）
+        } catch (error) {
+            console.error(`Path normalization error for ${filePath}:`, error);
+            return filePath;
+        }
+    });
+
+    try {
+        updateStatus(`${processedFilePaths.length}個のファイルを処理中...`);
+        showLoading(true);
+        
+        // 進捗表示の初期化
+        let processedFiles = 0;
+        const totalFiles = processedFilePaths.length;
+
+        // 進捗更新のリスナーを設定
+        const progressHandler = (progressData) => {
+            const { file, processed, total } = progressData;
+            updateStatus(`処理中: ${file} (${processed}/${total})`);
+        };
+
+        // 進捗イベントのリスナーを追加
+        if (window.electronAPI.onExtractionProgress) {
+            window.electronAPI.onExtractionProgress(progressHandler);
+        }
+
+        console.log('Sending files to main process:', processedFilePaths);
+        const result = await window.electronAPI.extractImages(processedFilePaths);
         
         if (result.success) {
-            appState.files = result.data;
+            const successfulFiles = result.data.filter(file => file.success);
+            const failedFiles = result.data.filter(file => !file.success);
+            
+            appState.files = successfulFiles;
             appState.allImages = [];
             
-            // すべての画像を収集
-            result.data.forEach(file => {
-                file.images.forEach(image => {
-                    image.sourceFile = file.fileName;
-                    appState.allImages.push(image);
-                });
+            // 成功したファイルから画像を収集
+            successfulFiles.forEach(file => {
+                if (file.images && Array.isArray(file.images)) {
+                    file.images.forEach(image => {
+                        image.sourceFile = file.fileName;
+                        appState.allImages.push(image);
+                    });
+                }
             });
 
             updateFileList();
             updateImageDisplay();
             updateStats();
-            updateStatus(`${appState.files.length}個のファイルから${appState.allImages.length}個の画像を抽出しました`);
+            
+            // 結果メッセージの生成
+            let statusMessage = `${successfulFiles.length}個のファイルから${appState.allImages.length}個の画像を抽出しました`;
+            
+            if (failedFiles.length > 0) {
+                statusMessage += ` (${failedFiles.length}個のファイルで問題が発生)`;
+                console.warn('Failed files:', failedFiles.map(f => ({ 
+                    fileName: f.fileName, 
+                    error: f.error 
+                })));
+                
+                // 失敗したファイルの詳細をユーザーに表示
+                const failedFileNames = failedFiles.map(f => f.fileName).join(', ');
+                setTimeout(() => {
+                    updateStatus(`処理完了。失敗したファイル: ${failedFileNames}`);
+                }, 3000);
+            }
+            
+            updateStatus(statusMessage);
         } else {
             updateStatus(`エラー: ${result.error}`);
+            console.error('Extraction failed:', result);
         }
     } catch (error) {
         console.error('Error processing files:', error);
-        updateStatus('ファイルの処理中にエラーが発生しました');
+        
+        // より詳細なエラーメッセージ
+        let errorMessage = 'ファイルの処理中にエラーが発生しました';
+        
+        if (error.message.includes('ENOENT')) {
+            errorMessage = 'ファイルが見つかりません（ファイルパスまたは日本語文字に問題がある可能性があります）';
+        } else if (error.message.includes('EACCES')) {
+            errorMessage = 'ファイルにアクセスできません（権限不足）';
+        } else if (error.message.includes('EMFILE')) {
+            errorMessage = 'ファイルを開きすぎています（一度に処理するファイル数を減らしてください）';
+        } else if (error.message.includes('encoding') || error.message.includes('文字')) {
+            errorMessage = '文字エンコーディングの問題が発生しました';
+        }
+        
+        updateStatus(errorMessage);
     } finally {
         showLoading(false);
+        
+        // 進捗リスナーのクリーンアップ
+        if (window.electronAPI.removeExtractionProgressListener) {
+            window.electronAPI.removeExtractionProgressListener();
+        }
     }
 }
 
@@ -189,7 +531,7 @@ function updateFileList() {
     elements.fileStats.style.display = 'block';
 }
 
-// 画像表示の更新
+// 画像表示の更新（最適化版）
 function updateImageDisplay() {
     if (appState.allImages.length === 0) {
         elements.imageContainer.innerHTML = `
@@ -207,32 +549,84 @@ function updateImageDisplay() {
     elements.imageContainer.innerHTML = `<div class="${containerClass}" id="imageDisplayArea"></div>`;
     
     const displayArea = document.getElementById('imageDisplayArea');
+    const useVirtualScroll = appState.allImages.length > PERFORMANCE_CONFIG.VIRTUAL_SCROLL_THRESHOLD;
+    const useLazyLoad = appState.allImages.length > PERFORMANCE_CONFIG.LAZY_LOAD_THRESHOLD;
     
-    appState.allImages.forEach((image, index) => {
-        const imageItem = document.createElement('div');
-        imageItem.className = 'image-item';
+    // バッチレンダリングの実装
+    const renderBatch = (startIndex, endIndex) => {
+        const fragment = document.createDocumentFragment();
         
-        const thumbnailSrc = image.thumbnail || image.data;
-        const dimensions = image.width && image.height ? `${image.width} × ${image.height}` : '不明';
-        const fileSize = formatFileSize(image.size);
+        for (let i = startIndex; i < endIndex && i < appState.allImages.length; i++) {
+            const image = appState.allImages[i];
+            const imageItem = createImageItem(image, useLazyLoad);
+            fragment.appendChild(imageItem);
+        }
         
-        imageItem.innerHTML = `
-            <img src="${thumbnailSrc}" alt="${image.name}" class="image-thumbnail">
-            <div class="image-info">
-                <div class="image-name" title="${image.name}">${image.name}</div>
-                <div class="image-details">${dimensions} • ${fileSize}</div>
-            </div>
-        `;
+        displayArea.appendChild(fragment);
+    };
+    
+    if (useVirtualScroll) {
+        // 仮想スクロール使用時は初期表示分のみレンダリング
+        const initialBatchSize = Math.min(PERFORMANCE_CONFIG.BATCH_RENDER_SIZE, appState.allImages.length);
+        renderBatch(0, initialBatchSize);
+        console.log(`Virtual scrolling enabled for ${appState.allImages.length} images`);
+    } else {
+        // 通常表示時はバッチでレンダリング
+        let currentIndex = 0;
+        const renderNextBatch = () => {
+            const endIndex = Math.min(currentIndex + PERFORMANCE_CONFIG.BATCH_RENDER_SIZE, appState.allImages.length);
+            renderBatch(currentIndex, endIndex);
+            currentIndex = endIndex;
+            
+            if (currentIndex < appState.allImages.length) {
+                // 次のバッチを非同期でレンダリング
+                requestAnimationFrame(renderNextBatch);
+            }
+        };
         
-        imageItem.addEventListener('click', () => {
-            showImageModal(image);
-        });
-        
-        displayArea.appendChild(imageItem);
-    });
+        renderNextBatch();
+    }
 
     elements.saveAllBtn.disabled = false;
     elements.exportZipBtn.disabled = false;
+}
+
+// 画像アイテムの作成（最適化版）
+function createImageItem(image, useLazyLoad) {
+    const imageItem = document.createElement('div');
+    imageItem.className = 'image-item';
+    
+    const thumbnailSrc = image.thumbnail || image.data;
+    const dimensions = image.width && image.height ? `${image.width} × ${image.height}` : '不明';
+    const fileSize = formatFileSize(image.size);
+    
+    // 遅延読み込み用の属性設定
+    const imgSrc = useLazyLoad ? '' : thumbnailSrc;
+    const imgDataSrc = useLazyLoad ? thumbnailSrc : '';
+    
+    imageItem.innerHTML = `
+        <img ${imgSrc ? `src="${imgSrc}"` : ''} 
+             ${imgDataSrc ? `data-src="${imgDataSrc}"` : ''} 
+             alt="${image.name}" 
+             class="image-thumbnail ${useLazyLoad ? 'lazy' : ''}"
+             loading="lazy">
+        <div class="image-info">
+            <div class="image-name" title="${image.name}">${image.name}</div>
+            <div class="image-details">${dimensions} • ${fileSize}</div>
+        </div>
+    `;
+    
+    // 遅延読み込みの設定
+    if (useLazyLoad && window.imageObserver) {
+        const img = imageItem.querySelector('.image-thumbnail');
+        window.imageObserver.observe(img);
+    }
+    
+    imageItem.addEventListener('click', () => {
+        showImageModal(image);
+    });
+    
+    return imageItem;
 }
 
 // 統計情報の更新

@@ -1,6 +1,7 @@
 const { app, BrowserWindow, ipcMain, dialog, Menu, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const yazl = require('yazl');
 const { extractImages } = require('./utils/imageExtractor');
 
@@ -26,18 +27,38 @@ app.on('window-all-closed', () => {
 });
 
 function createWindow() {
-    // メインウィンドウを作成
+    // メインウィンドウを作成（セキュリティ強化）
     mainWindow = new BrowserWindow({
         width: 1200,
         height: 800,
+        minWidth: 800,
+        minHeight: 600,
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
             enableRemoteModule: false,
-            preload: path.join(__dirname, 'preload.js')
+            allowRunningInsecureContent: false,
+            experimentalFeatures: false,
+            webSecurity: true,
+            preload: path.join(__dirname, 'preload.js'),
+            sandbox: false // IPCを使用するためfalse
         },
         icon: path.join(__dirname, '../assets/icon.png'),
         show: false // 初期化完了まで非表示
+    });
+
+    // セキュリティ強化
+    mainWindow.webContents.on('will-navigate', (event, navigationUrl) => {
+        // 外部URLへのナビゲーションを防止
+        const parsedUrl = new URL(navigationUrl);
+        if (parsedUrl.origin !== 'file://') {
+            event.preventDefault();
+        }
+    });
+
+    mainWindow.webContents.setWindowOpenHandler(() => {
+        // 新しいウィンドウの開放を防止
+        return { action: 'deny' };
     });
 
     // HTMLファイルを読み込み
@@ -49,8 +70,23 @@ function createWindow() {
     });
 
     // 開発モードでは開発者ツールを開く
-    if (process.argv.includes('--dev')) {
+    if (process.argv.includes('--dev') || process.env.NODE_ENV === 'development') {
         mainWindow.webContents.openDevTools();
+    } else {
+        // プロダクションモードでは開発者ツールを無効化
+        mainWindow.webContents.on('before-input-event', (event, input) => {
+            // Ctrl+Shift+I, F12, Ctrl+Shift+J を無効化
+            if ((input.control && input.shift && input.key.toLowerCase() === 'i') ||
+                input.key.toLowerCase() === 'f12' ||
+                (input.control && input.shift && input.key.toLowerCase() === 'j')) {
+                event.preventDefault();
+            }
+        });
+        
+        // 右クリックメニューを無効化
+        mainWindow.webContents.on('context-menu', (event) => {
+            event.preventDefault();
+        });
     }
 
     createMenu();
@@ -139,21 +175,170 @@ async function openFileDialog() {
     }
 }
 
-// レンダラープロセスからのIPC通信を処理
+// レンダラープロセスからのIPC通信を処理（最適化）
 ipcMain.handle('extract-images', async (event, filePaths) => {
     try {
-        const results = [];
-        for (const filePath of filePaths) {
-            const images = await extractImages(filePath);
-            results.push({
-                filePath,
-                fileName: path.basename(filePath),
-                images
-            });
+        if (!Array.isArray(filePaths) || filePaths.length === 0) {
+            throw new Error('有効なファイルパスが指定されていません');
         }
+        
+        // 同時処理数を制限してメモリ使用量を抑制
+        const MAX_CONCURRENT = 3;
+        const results = [];
+        
+        for (let i = 0; i < filePaths.length; i += MAX_CONCURRENT) {
+            const batch = filePaths.slice(i, i + MAX_CONCURRENT);
+            const batchPromises = batch.map(async (filePath) => {
+                try {
+                    // ファイルパスのログ出力（デバッグ用）
+                    console.log(`Processing file: "${filePath}"`);
+                    console.log(`File path length: ${filePath.length}`);
+                    console.log(`File path bytes:`, Buffer.from(filePath, 'utf8'));
+                    
+                    // ファイル存在チェック（文字エンコーディング対応強化版）
+                    let actualFilePath = filePath;
+                    let fileExists = false;
+                    let fileStats = null;
+                    
+                    // 複数の方法でファイル存在をチェック
+                    const pathVariants = [
+                        filePath,
+                        path.resolve(filePath),
+                        path.normalize(filePath),
+                        // Windows特有の問題に対応
+                        filePath.replace(/\//g, '\\'),
+                        filePath.replace(/\\/g, '/')
+                    ];
+                    
+                    for (const pathVariant of pathVariants) {
+                        try {
+                            fileStats = await fs.promises.stat(pathVariant);
+                            if (fileStats.isFile()) {
+                                fileExists = true;
+                                actualFilePath = pathVariant;
+                                console.log(`File found with path variant: "${pathVariant}"`);
+                                break;
+                            }
+                        } catch (statError) {
+                            // 次のバリアントを試行
+                            continue;
+                        }
+                    }
+                    
+                    if (!fileExists) {
+                        const errorMsg = `ファイルが見つかりません: ${path.basename(filePath)}`;
+                        console.error(errorMsg);
+                        console.error('Tried path variants:', pathVariants);
+                        throw new Error(errorMsg);
+                    }
+                    
+                    console.log(`File validation successful: ${path.basename(actualFilePath)} (${fileStats.size} bytes)`);
+                    
+                    const images = await extractImages(actualFilePath, {
+                        compress: true,
+                        maxDimension: 4096,
+                        onProgress: (processed, total) => {
+                            // 進捗をレンダラーに送信
+                            mainWindow.webContents.send('extraction-progress', {
+                                file: path.basename(filePath),
+                                processed,
+                                total
+                            });
+                        }
+                    });
+                    
+                    
+                    return {
+                        filePath: actualFilePath,
+                        fileName: path.basename(actualFilePath),
+                        images: images || [],
+                        success: true
+                    };
+                } catch (error) {
+                    const errorMsg = `ファイル処理エラー: ${path.basename(filePath)} - ${error.message}`;
+                    console.error(errorMsg, error);
+                    return {
+                        filePath,
+                        fileName: path.basename(filePath),
+                        images: [],
+                        success: false,
+                        error: error.message
+                    };
+                }
+            });
+            
+            const batchResults = await Promise.all(batchPromises);
+            results.push(...batchResults);
+            
+            // ガベージコレクションを促進
+            if (global.gc) {
+                global.gc();
+            }
+        }
+        
         return { success: true, data: results };
     } catch (error) {
         console.error('Image extraction error:', error);
+        return { success: false, error: error.message };
+    }
+});
+
+// ファイルバッファ処理のハンドラー（ドラッグ&ドロップ用）
+ipcMain.handle('process-file-buffer', async (event, fileData) => {
+    try {
+        console.log('ファイルバッファ処理開始:', fileData.name);
+        
+        if (!fileData || !fileData.buffer) {
+            return { success: false, error: 'ファイルデータが無効です' };
+        }
+
+        // 一時ファイルを作成してバッファを書き込み
+        const tempDir = os.tmpdir();
+        const tempFileName = `temp_${Date.now()}_${fileData.name.replace(/[^\w\-_.]/g, '_')}`;
+        const tempFilePath = path.join(tempDir, tempFileName);
+        
+        try {
+            // ArrayBuffer を Buffer に変換
+            const buffer = Buffer.from(fileData.buffer);
+            await fs.promises.writeFile(tempFilePath, buffer);
+            
+            console.log(`一時ファイル作成: ${tempFilePath} (${buffer.length} bytes)`);
+            
+            // 画像抽出処理
+            const images = await extractImages(tempFilePath, {
+                compress: true,
+                maxDimension: 4096,
+                onProgress: (processed, total) => {
+                    event.sender.send('extraction-progress', {
+                        file: fileData.name,
+                        processed,
+                        total
+                    });
+                }
+            });
+            
+            console.log(`バッファから ${images?.length || 0}個の画像を抽出`);
+            
+            return {
+                success: true,
+                data: {
+                    fileName: fileData.name,
+                    images: images || []
+                }
+            };
+            
+        } finally {
+            // 一時ファイルを削除
+            try {
+                await fs.promises.unlink(tempFilePath);
+                console.log(`一時ファイル削除: ${tempFilePath}`);
+            } catch (unlinkError) {
+                console.warn(`一時ファイル削除失敗: ${tempFilePath}`, unlinkError);
+            }
+        }
+        
+    } catch (error) {
+        console.error('ファイルバッファ処理エラー:', error);
         return { success: false, error: error.message };
     }
 });

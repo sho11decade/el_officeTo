@@ -274,6 +274,38 @@ body {
     height: 140px;
     object-fit: cover;
     display: block;
+    transition: opacity 0.3s ease, transform 0.2s ease;
+}
+
+/* 遅延読み込み用スタイル */
+.image-thumbnail.lazy {
+    opacity: 0.7;
+    background: #f1f5f9;
+    position: relative;
+}
+
+.image-thumbnail.lazy::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 20px;
+    height: 20px;
+    margin: -10px 0 0 -10px;
+    border: 2px solid #e2e8f0;
+    border-top: 2px solid #3b82f6;
+    border-radius: 50%;
+    animation: loading-spin 1s linear infinite;
+}
+
+@keyframes loading-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* 画像読み込み完了時のスタイル */
+.image-thumbnail:not(.lazy) {
+    opacity: 1;
 }
 
 .image-info {

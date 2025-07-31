@@ -6,9 +6,17 @@
   "homepage": "./",
   "scripts": {
     "start": "electron .",
-    "dev": "electron . --dev",
+    "dev": "NODE_ENV=development electron . --dev",
+    "start:prod": "NODE_ENV=production electron .",
+    "start:gc": "electron . --js-flags=\"--expose-gc\"",
     "build": "electron-builder",
+    "build:win": "electron-builder --win",
+    "build:mac": "electron-builder --mac", 
+    "build:linux": "electron-builder --linux",
     "dist": "electron-builder --publish=never",
+    "audit": "npm audit",
+    "audit:fix": "npm audit fix",
+    "security:check": "npm audit --audit-level=high",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
@@ -23,10 +31,10 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
-    "electron": "^37.2.4"
+    "electron": "^37.2.4",
+    "electron-builder": "^26.0.12"
   },
   "dependencies": {
-    "electron-builder": "^26.0.12",
     "mammoth": "^1.9.1",
     "sharp": "^0.34.3",
     "xlsx": "^0.18.5",
@@ -37,23 +45,63 @@
     "appId": "com.office-image-extractor.app",
     "productName": "Office Image Extractor",
     "directories": {
-      "output": "dist"
+      "output": "dist",
+      "buildResources": "assets"
     },
     "files": [
       "src/**/*",
-      "node_modules/**/*"
+      "assets/**/*",
+      "!**/*.md",
+      "!SECURITY_REPORT.md",
+      "!.gitignore"
     ],
+    "compression": "maximum",
+    "nodeGypRebuild": false,
+    "buildDependenciesFromSource": false,
     "win": {
-      "target": "nsis",
-      "icon": "assets/icon.ico"
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "assets/icon.png",
+      "verifyUpdateCodeSignature": false
     },
     "mac": {
-      "target": "dmg",
-      "icon": "assets/icon.icns"
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["x64", "arm64"]
+        }
+      ],
+      "icon": "assets/icon.png",
+      "category": "public.app-category.productivity"
     },
     "linux": {
-      "target": "AppImage",
-      "icon": "assets/icon.png"
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": ["x64"]
+        },
+        {
+          "target": "deb",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "assets/icon.png",
+      "category": "Office"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Office Image Extractor"
     }
   }
 }
