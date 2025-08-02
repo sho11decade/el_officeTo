@@ -15,6 +15,8 @@
     "build:linux": "electron-builder --linux --publish=never",
     "dist": "electron-builder --publish=never",
     "electron:clear-cache": "npx electron-builder install-app-deps --arch=x64",
+    "rebuild": "npm rebuild && electron-rebuild",
+    "install:clean": "rm -rf node_modules package-lock.json && npm install",
     "audit": "npm audit",
     "audit:fix": "npm audit fix",
     "security:check": "npm audit --audit-level=high",
@@ -33,7 +35,8 @@
   "license": "MIT",
   "devDependencies": {
     "electron": "^37.2.4",
-    "electron-builder": "^26.0.12"
+    "electron-builder": "^26.0.12",
+    "electron-rebuild": "^3.2.9"
   },
   "dependencies": {
     "mammoth": "^1.9.1",
@@ -60,9 +63,11 @@
     "compression": "normal",
     "nodeGypRebuild": true,
     "buildDependenciesFromSource": false,
+    "npmRebuild": true,
     "electronDownload": {
       "cache": ".electron"
     },
+    "nativeRebuilder": "sequential",
     "win": {
       "target": [
         {
