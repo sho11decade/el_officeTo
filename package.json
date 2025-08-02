@@ -10,10 +10,11 @@
     "start:prod": "NODE_ENV=production electron .",
     "start:gc": "electron . --js-flags=\"--expose-gc\"",
     "build": "electron-builder",
-    "build:win": "electron-builder --win",
-    "build:mac": "electron-builder --mac", 
-    "build:linux": "electron-builder --linux",
+    "build:win": "electron-builder --win --publish=never",
+    "build:mac": "electron-builder --mac --publish=never", 
+    "build:linux": "electron-builder --linux --publish=never",
     "dist": "electron-builder --publish=never",
+    "electron:clear-cache": "npx electron-builder install-app-deps --arch=x64",
     "audit": "npm audit",
     "audit:fix": "npm audit fix",
     "security:check": "npm audit --audit-level=high",
@@ -53,11 +54,15 @@
       "assets/**/*",
       "!**/*.md",
       "!SECURITY_REPORT.md",
-      "!.gitignore"
+      "!.gitignore",
+      "!node_modules/.cache"
     ],
-    "compression": "maximum",
-    "nodeGypRebuild": false,
+    "compression": "normal",
+    "nodeGypRebuild": true,
     "buildDependenciesFromSource": false,
+    "electronDownload": {
+      "cache": ".electron"
+    },
     "win": {
       "target": [
         {
@@ -65,12 +70,13 @@
           "arch": ["x64"]
         },
         {
-          "target": "portable",
+          "target": "portable", 
           "arch": ["x64"]
         }
       ],
       "icon": "assets/icon.png",
-      "verifyUpdateCodeSignature": false
+      "verifyUpdateCodeSignature": false,
+      "requestedExecutionLevel": "asInvoker"
     },
     "mac": {
       "target": [

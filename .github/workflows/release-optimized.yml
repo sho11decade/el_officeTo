@@ -1,4 +1,4 @@
-name: Build and Release
+name: Build and Release (Optimized)
 
 on:
   push:
@@ -6,12 +6,17 @@ on:
       - 'v*'
   workflow_dispatch:
 
+env:
+  ELECTRON_CACHE: .electron
+  ELECTRON_BUILDER_CACHE: .cache/electron-builder
+
 jobs:
   build:
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 60
+    timeout-minutes: 90
     
     strategy:
+      fail-fast: false
       matrix:
         os: [windows-latest, macos-latest, ubuntu-latest]
         
@@ -25,32 +30,59 @@ jobs:
         node-version: '18'
         cache: 'npm'
         
-    - name: Clean npm cache (Windows)
+    - name: Cache Electron binaries
+      uses: actions/cache@v3
+      with:
+        path: |
+          .electron
+          .cache
+          ~/.cache/electron
+          ~/AppData/Local/electron/Cache
+        key: ${{ runner.os }}-electron-${{ hashFiles('package-lock.json') }}
+        restore-keys: |
+          ${{ runner.os }}-electron-
+          
+    - name: Cache node_modules
+      uses: actions/cache@v3
+      with:
+        path: node_modules
+        key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
+        restore-keys: |
+          ${{ runner.os }}-node-
+          
+    - name: Clean installation (Windows)
       if: matrix.os == 'windows-latest'
-      run: npm cache clean --force
-      
-    - name: Install dependencies
-      run: npm ci
-      
-    - name: Clear electron cache
       run: |
-        npm run electron:clear-cache || echo "Cache clear failed, continuing..."
-      continue-on-error: true
+        npm cache clean --force
+        Remove-Item -Recurse -Force node_modules -ErrorAction SilentlyContinue
+        Remove-Item -Force package-lock.json -ErrorAction SilentlyContinue
+        
+    - name: Install dependencies
+      run: |
+        npm install
+        npx electron-builder install-app-deps
+        
+    - name: Verify electron installation
+      run: npx electron --version
       
     - name: Build application (Windows)
       if: matrix.os == 'windows-latest'
-      run: npm run build:win
-      timeout-minutes: 30
+      run: |
+        $env:ELECTRON_BUILDER_ALLOW_UNRESOLVED_DEPENDENCIES="true"
+        npm run build:win
+      timeout-minutes: 45
       
     - name: Build application (macOS)
       if: matrix.os == 'macos-latest'
-      run: npm run build:mac
-      timeout-minutes: 30
+      run: |
+        export CSC_IDENTITY_AUTO_DISCOVERY=false
+        npm run build:mac
+      timeout-minutes: 45
       
     - name: Build application (Linux)
       if: matrix.os == 'ubuntu-latest'
       run: npm run build:linux
-      timeout-minutes: 30
+      timeout-minutes: 45
       
     - name: Upload Windows artifacts
       if: matrix.os == 'windows-latest'
@@ -59,8 +91,9 @@ jobs:
         name: windows-builds
         path: |
           dist/*.exe
-          dist/*.blockmap
-        retention-days: 5
+          dist/*.exe.blockmap
+        retention-days: 7
+        if-no-files-found: error
           
     - name: Upload macOS artifacts
       if: matrix.os == 'macos-latest'
@@ -69,8 +102,9 @@ jobs:
         name: macos-builds
         path: |
           dist/*.dmg
-          dist/*.blockmap
-        retention-days: 5
+          dist/*.dmg.blockmap
+        retention-days: 7
+        if-no-files-found: error
           
     - name: Upload Linux artifacts
       if: matrix.os == 'ubuntu-latest'
@@ -80,19 +114,8 @@ jobs:
         path: |
           dist/*.AppImage
           dist/*.deb
-        retention-days: 5
-        
-    - name: List build outputs
-      run: |
-        echo "Build completed successfully"
-        ls -la dist/ || dir dist\
-        
-    - name: Cleanup temp files
-      if: always()
-      run: |
-        echo "Cleaning up temporary files..."
-        npm cache clean --force || echo "npm cache clean failed"
-      continue-on-error: true
+        retention-days: 7
+        if-no-files-found: error
 
   release:
     needs: build
@@ -106,13 +129,11 @@ jobs:
       
     - name: Download all artifacts
       uses: actions/download-artifact@v4
-      with:
-        merge-multiple: true
-        
-    - name: List downloaded files
+      
+    - name: Display structure
       run: |
-        echo "Downloaded artifacts:"
-        find . -name "*.exe" -o -name "*.dmg" -o -name "*.AppImage" -o -name "*.deb" | head -20
+        echo "Downloaded files structure:"
+        find . -type f \( -name "*.exe" -o -name "*.dmg" -o -name "*.AppImage" -o -name "*.deb" \) -ls
       
     - name: Create Release
       uses: softprops/action-gh-release@v1
@@ -126,5 +147,6 @@ jobs:
         draft: false
         prerelease: false
         generate_release_notes: true
+        fail_on_unmatched_files: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
