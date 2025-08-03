@@ -15,8 +15,9 @@
     "build:linux": "electron-builder --linux --publish=never",
     "dist": "electron-builder --publish=never",
     "release": "electron-builder --publish=always",
+    "postinstall": "electron-builder install-app-deps",
     "electron:clear-cache": "npx electron-builder install-app-deps --arch=x64",
-    "rebuild": "npm rebuild && npx @electron/rebuild",
+    "rebuild": "electron-builder install-app-deps",
     "install:clean": "rm -rf node_modules package-lock.json && npm install",
     "audit": "npm audit",
     "audit:fix": "npm audit fix",
@@ -35,7 +36,6 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
-    "@electron/rebuild": "^4.0.1",
     "electron": "^37.2.4",
     "electron-builder": "^26.0.12"
   },
