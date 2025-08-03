@@ -1,4 +1,4 @@
-name: GitHub CI
+name: Windows Release Build
 
 on:
   push:
@@ -10,12 +10,7 @@ jobs:
   build:
     permissions:
       contents: write
-    strategy:
-      matrix:
-        # クロスプラットフォーム・ビルド
-        platform: [macos-latest, ubuntu-latest, windows-latest]
-
-    runs-on: ${{ matrix.platform }}
+    runs-on: windows-latest
     steps:
       # Actions の基本設定
       - name: Check out Git repositry
@@ -30,14 +25,21 @@ jobs:
 
       # 依存パッケージのインストール
       - name: Install dependencies
+        env:
+          # Sharp のプリコンパイルされたバイナリを使用
+          npm_config_sharp_binary_host: https://github.com/lovell/sharp-libvips/releases/download/
+          npm_config_sharp_libvips_binary_host: https://github.com/lovell/sharp-libvips/releases/download/
+          # node-gyp のビルドを回避
+          npm_config_build_from_source: false
+          SHARP_IGNORE_GLOBAL_LIBVIPS: 1
         run: npm ci
 
       #### webpackなどによるビルドが必要なとき ####
       # - name: Build
         # run: npm run build
 
-      # GitHub releases へデプロイ
-      - name: Deploy
+      # Windows向けアプリケーションをGitHub releases へデプロイ
+      - name: Deploy to GitHub Releases
         env:
           # GITHUB_TOKEN は自動生成されるのでとくに設定は不要
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
