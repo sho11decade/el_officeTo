@@ -1,6 +1,6 @@
 {
   "name": "office-image-extractor",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "Extract and view images from Microsoft Office files",
   "main": "src/main.js",
   "homepage": "./",
