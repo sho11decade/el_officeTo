@@ -11,12 +11,12 @@
     "start:gc": "electron . --js-flags=\"--expose-gc\"",
     "build": "electron-builder",
     "build:win": "electron-builder --win --publish=never",
-    "build:mac": "electron-builder --mac --publish=never", 
+    "build:mac": "electron-builder --mac --publish=never",
     "build:linux": "electron-builder --linux --publish=never",
     "dist": "electron-builder --publish=never",
     "release": "electron-builder --publish=always",
     "electron:clear-cache": "npx electron-builder install-app-deps --arch=x64",
-    "rebuild": "npm rebuild && electron-rebuild",
+    "rebuild": "npm rebuild && npx @electron/rebuild",
     "install:clean": "rm -rf node_modules package-lock.json && npm install",
     "audit": "npm audit",
     "audit:fix": "npm audit fix",
@@ -35,9 +35,9 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
+    "@electron/rebuild": "^4.0.1",
     "electron": "^37.2.4",
-    "electron-builder": "^26.0.12",
-    "electron-rebuild": "^3.2.9"
+    "electron-builder": "^26.0.12"
   },
   "dependencies": {
     "mammoth": "^1.9.1",
@@ -73,11 +73,15 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         },
         {
-          "target": "portable", 
-          "arch": ["x64"]
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "assets/icon.png",
@@ -88,7 +92,10 @@
       "target": [
         {
           "target": "dmg",
-          "arch": ["x64", "arm64"]
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         }
       ],
       "icon": "assets/icon.png",
@@ -98,11 +105,15 @@
       "target": [
         {
           "target": "AppImage",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         },
         {
           "target": "deb",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "assets/icon.png",
