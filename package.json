@@ -14,6 +14,7 @@
     "build:mac": "electron-builder --mac --publish=never", 
     "build:linux": "electron-builder --linux --publish=never",
     "dist": "electron-builder --publish=never",
+    "release": "electron-builder --publish=always",
     "electron:clear-cache": "npx electron-builder install-app-deps --arch=x64",
     "rebuild": "npm rebuild && electron-rebuild",
     "install:clean": "rm -rf node_modules package-lock.json && npm install",

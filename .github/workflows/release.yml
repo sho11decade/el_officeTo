@@ -8,6 +8,8 @@ on:
 
 jobs:
   build:
+    permissions:
+      contents: write
     strategy:
       matrix:
         # クロスプラットフォーム・ビルド
@@ -17,17 +19,22 @@ jobs:
     steps:
       # Actions の基本設定
       - name: Check out Git repositry
-        uses: actions/checkout@master
+        uses: actions/checkout@v4
 
       # Node.js のセットアップ
       - name: Setup Node.js
-        uses: actions/setup-node@master
+        uses: actions/setup-node@v4
         with:
           node-version: 18
+          cache: 'npm'
 
       # 依存パッケージのインストール
       - name: Install dependencies
-        run: npm install
+        run: npm ci
+
+      # Sharp の再ビルド（クロスプラットフォーム対応）
+      - name: Rebuild native dependencies
+        run: npm rebuild
 
       #### webpackなどによるビルドが必要なとき ####
       # - name: Build
